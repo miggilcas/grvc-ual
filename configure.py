@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import subprocess
+from builtins import input
 
 class bcolors:    
     HEADER = '\033[95m'
@@ -13,24 +14,25 @@ class bcolors:
 
 def main():
     backends = {
-        "mavros" : ["MAVROS", "    $ sudo apt install ros-kinetic-mavros ros-kinetic-mavros-extras \n    $ sudo geographiclib-get-geoids egm96-5", False],
+        "mavros" : ["MAVROS", "    sudo geographiclib-get-geoids egm96-5", False],
         "mavlink" : ["MAVLink", "    Download and install MAVSDK .deb: https://github.com/mavlink/MAVSDK/releases", False],
         "gazebo_light" : ["Gazebo Light", "",False],
         "dji_ros" : ["DJI ROS", "    Download and install DJI SDK core library: https://github.com/dji-sdk/Onboard-SDK \n    Download in your catkin workspace the DJI Onboard SDK ROS: https://github.com/dji-sdk/Onboard-SDK-ROS", False],
         "crazyflie" : ["Crazyflie", "    Download and install crazyflie_ros: https://github.com/whoenig/crazyflie_ros", False],
         "ue" : ["Unreal Engine", "    TBD", False]
+    # TBD: Add px4 dependencies
     }
     instructions = ""
 
-    print bcolors.OKBLUE + bcolors.BOLD + """   ____ ______     ______    _   _   _    _     
+    print(bcolors.OKBLUE + bcolors.BOLD + """   ____ ______     ______    _   _   _    _     
   / ___|  _ \\ \\   / / ___|  | | | | / \\  | |    
  | |  _| |_) \\ \\ / / |      | | | |/ _ \\ | |    
  | |_| |  _ < \\ V /| |___   | |_| / ___ \\| |___ 
   \\____|_| \\_\\ \\_/  \\____|   \\___/_/   \\_\\_____|                                      
-    """ + bcolors.ENDC
-    print bcolors.BOLD + "> Select the backends that you want to use:" + bcolors.ENDC
+    """ + bcolors.ENDC)
+    print(bcolors.BOLD + "> Select the backends that you want to use:" + bcolors.ENDC)
     for b in backends:
-        selected = raw_input("  - " + backends[b][0] + " [y/N]: ")
+        selected = input("  - " + backends[b][0] + " [y/N]: ")
         if (selected == 'y' or selected == 'Y'):
             if b != "mavros" and backends[b][1]:
                 instructions += "\n* Backend " + backends[b][0] + ":\n" + backends[b][1] + "\n"
@@ -39,7 +41,7 @@ def main():
         else:
             subprocess.call("touch ual_backend_" + b + "/CATKIN_IGNORE", shell=True)
     
-    selected = raw_input(bcolors.BOLD + "\n> Would you like to install needed dependencies? " + bcolors.ENDC + "[y/N]: ")
+    selected = input(bcolors.BOLD + "\n> Would you like to install needed dependencies? " + bcolors.ENDC + "[y/N]: ")
     if (selected == 'y' or selected == 'Y'):
         subprocess.call("sudo apt install -y libeigen3-dev", shell=True)
         subprocess.call("sudo apt install -y ros-$(rosversion -d)-joy", shell=True)
@@ -51,14 +53,27 @@ def main():
             subprocess.call("sudo geographiclib-get-geoids egm96-5", shell=True)
             subprocess.call("sudo usermod -a -G dialout $USER", shell=True)
             subprocess.call("sudo apt remove modemmanager", shell=True)
+        # in order to use the last version of the dji sdk ROS
+        if backends["dji_ros"][2]:
+            # clone the repositories
+            #subprocess.call("cd .. && git clone https://github.com/dji-sdk/Onboard-SDK-ROS")
+            # install the dependencies
+            subprocess.call("sudo apt install -y ros-$(rosversion -d)-nmea-comms", shell=True)
+            subprocess.call("sudo apt install -y ffmpeg", shell=True)
+            subprocess.call("sudo apt install -y libusb-1.0-0-dev", shell=True)
+            subprocess.call("sudo apt install -y libsdl2-dev", shell=True)
+            subprocess.call("sudo apt install -y libavcodec-dev libavformat-dev libavfilter-dev", shell=True)
+
+
+
     else:
         if backends["mavros"][2]:
             instructions += "\n* Backend " + backends["mavros"][0] + ":\n" + backends["mavros"][1] + "\n"
 
     # Print instructions
-    print bcolors.BOLD + "\n> Instructions to build the selected backends:" + bcolors.ENDC
-    print instructions
-    print "* Further and detailed build instructions in https://github.com/grvcteam/grvc-ual/wiki ;)\n"
+    print(bcolors.BOLD + "\n> Instructions to build the selected backends:" + bcolors.ENDC)
+    print(instructions)
+    print("* Further and detailed build instructions in https://github.com/grvcteam/grvc-ual/wiki ;)\n")
 
 if __name__ == "__main__":
     main()

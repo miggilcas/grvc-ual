@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 
 def temp_dir(id):
@@ -28,4 +28,4 @@ def check_unknown_args(unknown):
 
 
 if __name__ == "__main__":
-    print "This is a utils collection, not a script!"
+    print("This is a utils collection, not a script!")

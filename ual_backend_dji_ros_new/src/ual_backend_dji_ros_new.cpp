@@ -20,7 +20,7 @@
 //----------------------------------------------------------------------------------------------------------------------
 
 
-#include <ual_backend_dji_ros/ual_backend_dji_ros.h>
+#include <ual_backend_dji_ros_new/ual_backend_dji_ros_new.h>
 #include <Eigen/Eigen>
 #include <ros/ros.h>
 
@@ -40,7 +40,7 @@ bool going_up;
 
 namespace grvc { namespace ual {
 
-BackendDjiRos::BackendDjiRos()
+BackendDjiRosNew::BackendDjiRosNew() // checked
     : Backend()
 {
     // Parse arguments
@@ -66,23 +66,27 @@ BackendDjiRos::BackendDjiRos()
     pnh.param<float>("z_vel_max_dn", mpc_z_vel_max_dn, 2.0);
     pnh.param<float>("yawrate_max", mc_yawrate_max, 0.8);
 
-    ROS_INFO("BackendDjiRos constructor with id %d",robot_id_);
-    // ROS_INFO("BackendDjiRos: thresholds = %f %f", position_th_, orientation_th_);
+    ROS_INFO("BackendDjiRosNew constructor with id %d",robot_id_);
+    // ROS_INFO("BackendDjiRosNew: thresholds = %f %f", position_th_, orientation_th_);
 
     // // Init ros communications
     ros::NodeHandle nh;
-    std::string dji_ns = "dji_osdk_ros"; // changed in newer version of dji_sdk
+    std::string dji_ns = "dji_osdk_ros"; 
         
     //ROS services
-    std::string activation_srv = dji_ns + "/activation";
-    std::string arming_srv = dji_ns + "/drone_arm_control";
+    
     std::string set_local_pos_ref_srv = dji_ns + "/set_local_pos_ref";
     std::string sdk_control_authority_srv = dji_ns + "/sdk_control_authority";
-    std::string drone_task_control_srv = dji_ns + "/drone_task_control";
+    std::string flight_task_control_srv = dji_ns + "/flight_task_control";
+
+    // M210
     std::string mission_waypoint_upload_srv = dji_ns + "/mission_waypoint_upload";
     std::string mission_waypoint_setSpeed_srv = dji_ns + "/mission_waypoint_setSpeed";
     std::string mission_waypoint_action_srv = dji_ns + "/mission_waypoint_action";
 
+    // M300
+    std::string mission_waypointV2_upload_srv = dji_ns + "/waypointV2_uploadMission";
+    std::string mission_waypointV2_action_srv = dji_ns + "/waypointV2_uploadAction";
     // ROS extra services
 
     std::string mission_waypoint_getInfo_srv = dji_ns + "/mission_waypoint_getInfo";
@@ -98,30 +102,29 @@ BackendDjiRos::BackendDjiRos()
     std::string get_status_topic = dji_ns + "/flight_status";
     std::string get_mode_topic = dji_ns + "/display_mode";
 
-    std::string get_laser_altitude_topic = "/laser_altitude";
+    //std::string get_laser_altitude_topic = "/laser_altitude";
 
     // ROS published topics
-    std::string flight_control_topic = dji_ns + "/flight_control_setpoint_generic";
-
-    // ROS services' Clients
-    activation_client_ = nh.serviceClient<dji_sdk::Activation>(activation_srv.c_str());
-    arming_client_ = nh.serviceClient<dji_sdk::DroneArmControl>(arming_srv.c_str());
+    //std::string flight_control_topic = dji_ns + "/flight_control_setpoint_generic";
+    // FROM HERE
+    // ROS services' Clients 
+    
     set_local_pos_ref_client_ = nh.serviceClient<dji_sdk::SetLocalPosRef>(set_local_pos_ref_srv.c_str());
-    sdk_control_authority_client_ = nh.serviceClient<dji_sdk::SDKControlAuthority>(sdk_control_authority_srv.c_str());
-    drone_task_control_client_ = nh.serviceClient<dji_sdk::DroneTaskControl>(drone_task_control_srv.c_str());
+    sdk_control_authority_client_ = nh.serviceClient<dji_sdk::ObtainControlAuthority>(sdk_control_authority_srv.c_str());
+    drone_task_control_client_ = nh.serviceClient<dji_sdk::FlightTaskControl>(drone_task_control_srv.c_str());
     mission_waypoint_upload_client = nh.serviceClient<dji_sdk::MissionWpUpload>(mission_waypoint_upload_srv.c_str());
     mission_waypoint_setSpeed_client = nh.serviceClient<dji_sdk::MissionWpSetSpeed>(mission_waypoint_setSpeed_srv.c_str());
     mission_waypoint_action_client = nh.serviceClient<dji_sdk::MissionWpAction>(mission_waypoint_action_srv.c_str());
 
-    flight_control_pub_ = nh.advertise<sensor_msgs::Joy>(flight_control_topic.c_str(), 1);
+    //flight_control_pub_ = nh.advertise<sensor_msgs::Joy>(flight_control_topic.c_str(), 1);
     // mavros_ref_pose_global_pub_ = nh.advertise<mavros_msgs::GlobalPositionTarget>(set_pose_global_topic.c_str(), 1);
     
 
     //test publishers
-    lookahead_pub = nh.advertise<std_msgs::Float64>("lookahead", 1);
-    offset_y_pub = nh.advertise<std_msgs::Float64>("offset_y", 1);
-    ref_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("ref_pose_y", 1);
-    ///
+    // lookahead_pub = nh.advertise<std_msgs::Float64>("lookahead", 1);
+    // offset_y_pub = nh.advertise<std_msgs::Float64>("offset_y", 1);
+    // ref_pose_pub = nh.advertise<geometry_msgs::PoseStamped>("ref_pose_y", 1);
+    // ///
 
     flight_status_sub_ = nh.subscribe<std_msgs::UInt8>(get_status_topic.c_str(), 1, \
         [this](const std_msgs::UInt8::ConstPtr& _msg) {
@@ -150,10 +153,10 @@ BackendDjiRos::BackendDjiRos()
             this->cur_pose_.pose.orientation = this->current_attitude_.quaternion;
     });
 
-    laser_altitude_sub_ = nh.subscribe<std_msgs::Float64>(get_laser_altitude_topic.c_str(), 1, \
-        [this](const std_msgs::Float64::ConstPtr& _msg) {
-            this->current_laser_altitude_ = *_msg;
-    });
+    // laser_altitude_sub_ = nh.subscribe<std_msgs::Float64>(get_laser_altitude_topic.c_str(), 1, \
+    //     [this](const std_msgs::Float64::ConstPtr& _msg) {
+    //         this->current_laser_altitude_ = *_msg;
+    // });
 
     linear_velocity_sub_ = nh.subscribe<geometry_msgs::Vector3Stamped>(get_linear_velocity_topic.c_str(), 1, \
         [this](const geometry_msgs::Vector3Stamped::ConstPtr& _msg) {
@@ -170,22 +173,21 @@ BackendDjiRos::BackendDjiRos()
     // // TODO: Check this and solve frames issue
     // // Wait until we have pose
     // while (!mavros_has_pose_ && ros::ok()) {
-    //     // ROS_INFO("BackendDjiRos: Waiting for pose");
+    //     // ROS_INFO("BackendDjiRosNew: Waiting for pose");
     //     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     // }
     // initHomeFrame();
 
-    control_thread_ = std::thread(&BackendDjiRos::controlThread, this);
+    control_thread_ = std::thread(&BackendDjiRosNew::controlThread, this);
         
-    // Wait for dji_sdk_node is running
-    ros::service::waitForService("dji_osdk_ros/activation");
-    dji_sdk::Activation activation;
-    activated_ = activation_client_.call(activation);
+    // Wait for dji_sdk_node is running with any of the services
+    ros::service::waitForService("dji_osdk_ros/flight_status");
+    
 
-    ROS_INFO("BackendDjiRos %d running!", robot_id_);
+    ROS_INFO("BackendDjiRosNew %d running!", robot_id_);
 }
-
-void BackendDjiRos::controlThread() {
+// TBD
+void BackendDjiRosNew::controlThread() {
     ros::param::param<double>("~dji_offboard_rate", control_thread_frequency_, 30.0);
     double hold_pose_time = 3.0;  // [s]  TODO param?
     int buffer_size = std::ceil(hold_pose_time * control_thread_frequency_);
@@ -228,7 +230,7 @@ void BackendDjiRos::controlThread() {
 
         case eControlMode::LOCAL_POSE: 
                         
-            BackendDjiRos::Quaternion2EulerAngle(q, roll, pitch, yaw);
+            BackendDjiRosNew::Quaternion2EulerAngle(q, roll, pitch, yaw);
              
             control_flag = (DJISDK::HORIZONTAL_POSITION |
                 DJISDK::VERTICAL_POSITION       |
@@ -337,7 +339,7 @@ void BackendDjiRos::controlThread() {
     }
 }
 
-grvc::ual::State BackendDjiRos::guessState() {
+grvc::ual::State BackendDjiRosNew::guessState() { // I think it could work like that
     // Sequentially checks allow state deduction
     if (!this->isReady()) { return uav_abstraction_layer::State::UNINITIALIZED; }
     if (this->flight_status_.data == DJISDK::FlightStatus::STATUS_STOPPED) { 
@@ -361,8 +363,8 @@ grvc::ual::State BackendDjiRos::guessState() {
 
     return uav_abstraction_layer::State::FLYING_MANUAL;
 }
-
-bool BackendDjiRos::altimeter_fail() {
+//TBD
+bool BackendDjiRosNew::altimeter_fail() { 
     double alt_2 = current_laser_altitude_.data;
     if(alt_1 == alt_2 && alt_1 != 0.0){
         alt_counter ++;
@@ -375,8 +377,8 @@ bool BackendDjiRos::altimeter_fail() {
     if (alt_counter > 100) return true;
     else return false;
 }
-
-void BackendDjiRos::Quaternion2EulerAngle(const geometry_msgs::Pose::_orientation_type& q, double& roll, double& pitch, double& yaw)
+//TBD
+void BackendDjiRosNew::Quaternion2EulerAngle(const geometry_msgs::Pose::_orientation_type& q, double& roll, double& pitch, double& yaw)
 {
 	// roll (x-axis rotation)
 	double sinr = +2.0 * (q.w * q.x + q.y * q.z);
@@ -395,7 +397,9 @@ void BackendDjiRos::Quaternion2EulerAngle(const geometry_msgs::Pose::_orientatio
 	double cosy = +1.0 - 2.0 * (q.y * q.y + q.z * q.z);  
 	yaw = atan2(siny, cosy);
 }
-void BackendDjiRos::setArmed(bool _value) {
+
+//TBD: Calling flightTaskControl 
+void BackendDjiRosNew::setArmed(bool _value) {
     int arm;
     if(_value) {arm=1;}
     else if(!_value) {arm=0;}
@@ -418,7 +422,7 @@ void BackendDjiRos::setArmed(bool _value) {
 //     }
 }
 
-// void BackendDjiRos::setFlightMode(const std::string& _flight_mode) {
+// void BackendDjiRosNew::setFlightMode(const std::string& _flight_mode) {
 //     mavros_msgs::SetMode flight_mode_service;
 //     flight_mode_service.request.base_mode = 0;
 //     flight_mode_service.request.custom_mode = _flight_mode;
@@ -438,8 +442,8 @@ void BackendDjiRos::setArmed(bool _value) {
 //         ROS_INFO("Trying to set [%s] mode; mavros_state_.mode = [%s]", _flight_mode.c_str(), mavros_state_.mode.c_str());
 //     }
 // }
-
-void BackendDjiRos::recoverFromManual() {
+//TBD
+void BackendDjiRosNew::recoverFromManual() {
     if (display_mode_.data != DJISDK::DisplayMode::MODE_P_GPS) {
         ROS_ERROR("Unable to recover from manual. Not in P_GPS MODE");
         ROS_INFO("Please switch rc to P_GPS MODE");
@@ -466,8 +470,8 @@ void BackendDjiRos::recoverFromManual() {
     }
     this->state_ = guessState();
 }
-
-void BackendDjiRos::setHome(bool set_z) {
+// Could work like that
+void BackendDjiRosNew::setHome(bool set_z) {
 
     dji_sdk::SetLocalPosRef set_local_pos_ref;
     set_local_pos_ref_client_.call(set_local_pos_ref);
@@ -475,8 +479,8 @@ void BackendDjiRos::setHome(bool set_z) {
     // local_start_pos_ = -Eigen::Vector3d(cur_pose_.pose.position.x, \
     //     cur_pose_.pose.position.y, cur_pose_.pose.position.z);
 }
-
-void BackendDjiRos::takeOff(double _height) {
+//TBD: Calling flightTaskControl 
+void BackendDjiRosNew::takeOff(double _height) {
     if (_height < 0.0) {
         ROS_ERROR("Takeoff height must be positive!");
         return;
@@ -537,8 +541,8 @@ void BackendDjiRos::takeOff(double _height) {
     control_mode_ = eControlMode::IDLE;    //Disable control in position
 
 }
-
-void BackendDjiRos::land() {
+//TBD: Calling flightTaskControl 
+void BackendDjiRosNew::land() {
     calling_land = true;
 
     dji_sdk::DroneTaskControl drone_task_control;
@@ -587,26 +591,28 @@ void BackendDjiRos::land() {
 //                 go_home_srv,
 //                 [this](std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
 //                 return this->goHome();
-
-void BackendDjiRos::goHome() {
+//TBD: Calling flightTaskControl 
+void BackendDjiRosNew::goHome() {
     dji_sdk::DroneTaskControl drone_task_control;
     drone_task_control.request.task = dji_sdk::DroneTaskControl::Request::TASK_GOHOME;
     drone_task_control_client_.call(drone_task_control);
 
     control_mode_ = eControlMode::IDLE; 
 }
-void BackendDjiRos::setVelocity(const Velocity& _vel) {
+
+// Could work like that
+void BackendDjiRosNew::setVelocity(const Velocity& _vel) {
     control_mode_ = eControlMode::LOCAL_VEL;  // Velocity control!
     reference_vel_ = _vel;
 
     last_command_time_ = ros::Time::now();
 }
 
-bool BackendDjiRos::isReady() const {    
+bool BackendDjiRosNew::isReady() const {    
         return activated_;
    }
 
-void BackendDjiRos::setPose(const geometry_msgs::PoseStamped& _world) {
+void BackendDjiRosNew::setPose(const geometry_msgs::PoseStamped& _world) {
     
     control_mode_ = eControlMode::LOCAL_POSE;    // Control in position
 
@@ -673,7 +679,8 @@ PurePursuitOutput DjiPurePursuit(geometry_msgs::Point _current, geometry_msgs::P
     return out;
 }
 
-void BackendDjiRos::goToWaypoint(const Waypoint& _world) {
+//Study
+void BackendDjiRosNew::goToWaypoint(const Waypoint& _world) {
     control_mode_ = eControlMode::LOCAL_POSE;    // Control in position
 
     float current_xy_vel = sqrt(cur_vel_.twist.linear.x*cur_vel_.twist.linear.x + cur_vel_.twist.linear.y*cur_vel_.twist.linear.y);
@@ -829,8 +836,8 @@ void BackendDjiRos::goToWaypoint(const Waypoint& _world) {
 
 
 }
-
-void	BackendDjiRos::goToWaypointGeo(const WaypointGeo& _wp){
+//Study
+void	BackendDjiRosNew::goToWaypointGeo(const WaypointGeo& _wp){
     
     dji_sdk::MissionWpAction mission_waypoint_action;
     dji_sdk::MissionWpUpload mission_waypoint_upload;
@@ -900,11 +907,11 @@ void	BackendDjiRos::goToWaypointGeo(const WaypointGeo& _wp){
     // }
 }
 
-/*void BackendDjiRos::trackPath(const WaypointList &_path) {
+/*void BackendDjiRosNew::trackPath(const WaypointList &_path) {
     // TODO: basic imlementation, ideally different from a stack of gotos
 }*/
 
-Pose BackendDjiRos::pose() {
+Pose BackendDjiRosNew::pose() {
         Pose out;
 
         out.pose.position.x = current_position_.point.x;
@@ -947,11 +954,11 @@ Pose BackendDjiRos::pose() {
         return out;
 }
 
-Pose BackendDjiRos::referencePose() {
+Pose BackendDjiRosNew::referencePose() {
     return reference_pose_;
 }
 
-Velocity BackendDjiRos::velocity() const {
+Velocity BackendDjiRosNew::velocity() const {
     Velocity out;
 
     out.twist.linear = current_linear_velocity_.vector;
@@ -960,9 +967,9 @@ Velocity BackendDjiRos::velocity() const {
     return out;
 }
 
-Odometry BackendDjiRos::odometry() const {}
+Odometry BackendDjiRosNew::odometry() const {}
 
-Transform BackendDjiRos::transform() const {
+Transform BackendDjiRosNew::transform() const {
     Transform out;
     out.header.stamp = ros::Time::now();
     out.header.frame_id = "map";
@@ -976,7 +983,7 @@ Transform BackendDjiRos::transform() const {
     return out;
 }
 
-bool BackendDjiRos::referencePoseReached() {
+bool BackendDjiRosNew::referencePoseReached() {
 
     double position_min, position_mean, position_max;
     double orientation_min, orientation_mean, orientation_max;
@@ -997,7 +1004,7 @@ bool BackendDjiRos::referencePoseReached() {
     return position_holds && orientation_holds;
 }
 
-// void BackendDjiRos::initHomeFrame() {
+// void BackendDjiRosNew::initHomeFrame() {
 
 //     uav_home_frame_id_ = "uav_" + std::to_string(robot_id_) + "_home";
 //     local_start_pos_ << 0.0, 0.0, 0.0;

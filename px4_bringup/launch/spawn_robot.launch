@@ -49,7 +49,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
         args="-id=$(arg id) -joy_name=saitek_p3200 -use_mavros=$(arg use_mavros)"/>
     </group>
 
-    <!-- Run mavros node -->
+    <!-- Run mavros node : extras to check-> -->
     <node pkg="px4_bringup" type="run_mavros.py" name="run_mavros_$(arg id)" output="screen" if="$(arg use_mavros)"
     args="-id=$(arg id) -mode=$(arg mode) -fcu_url=$(arg fcu_url) -gcs_url=$(arg gcs_url) -rtcm_topic=$(arg rtcm_topic)
             -remap_tfs=$(arg remap_mavros_tf) -mavros_config_pkg=$(arg mavros_config_pkg)" />

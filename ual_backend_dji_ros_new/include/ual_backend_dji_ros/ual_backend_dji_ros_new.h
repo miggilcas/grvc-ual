@@ -39,16 +39,27 @@
 #include <std_msgs/Float64.h>
 #include <sensor_msgs/Joy.h>
 
-#include <dji_sdk/dji_sdk.h>
-// #include <dji_sdk/dji_sdk_node.h>
-#include <dji_osdk_ros/Activation.h>
-#include <dji_osdk_ros/SetLocalPosRef.h>
-#include <dji_osdk_ros/SDKControlAuthority.h>
-#include <dji_osdk_ros/DroneTaskControl.h>
-#include <dji_osdk_ros/DroneArmControl.h>
-#include <dji_osdk_ros/MissionWpUpload.h>
-#include <dji_osdk_ros/MissionWpSetSpeed.h>
-#include <dji_osdk_ros/MissionWpAction.h>
+#include <dji_vehicle.hpp>
+
+// DJI OSDK ROS
+#include <dji_osdk_ros/dji_vehicle_node.h> //this one include all the necessary headers
+//flight control services: TBD: try to include the minimum necessary headers
+// #include <dji_osdk_ros/GetDroneType.h>
+// #include <dji_osdk_ros/FlightTaskControl.h>
+// #include <dji_osdk_ros/SetJoystickMode.h>
+// #include <dji_osdk_ros/JoystickAction.h>
+// #include <dji_osdk_ros/SetGoHomeAltitude.h>
+// #include <dji_osdk_ros/GetGoHomeAltitude.h>
+// #include <dji_osdk_ros/SetHomePoint.h>
+// #include <dji_osdk_ros/SetCurrentAircraftLocAsHomePoint.h>
+// #include <dji_osdk_ros/SetLocalPosRef.h>
+// #include <dji_osdk_ros/SetAvoidEnable.h>
+// #include <dji_osdk_ros/GetAvoidEnable.h>
+// #include <dji_osdk_ros/ObtainControlAuthority.h>
+// #include <dji_osdk_ros/KillSwitch.h>
+// #include <dji_osdk_ros/EmergencyBrake.h>
+
+
 
 
 // std_msgs::UInt8 S_FLYING = 2;
@@ -58,6 +69,8 @@ typedef double Quaterniond [4];
 
 namespace grvc { namespace ual {
 
+
+// TBD: explore this class, for now not useful
 class DjiHistoryBuffer {  // TODO: template? utils?
 public:
     void set_size(size_t _size) {
@@ -128,11 +141,11 @@ protected:
 };
 
  
-class BackendDjiRos : public Backend {
+class BackendDjiRosNew : public Backend {
 
 public:
-    BackendDjiRos();
-    // ~BackendDjiRos();
+    BackendDjiRosNew();
+    // ~BackendDjiRosNew();
 
     /// Backend is initialized and ready to run tasks?
     bool	         isReady() const override;
@@ -233,21 +246,26 @@ private:
     DjiHistoryBuffer orientation_error_;
 
     /// Ros Communication
-    ros::ServiceClient activation_client_;
-    ros::ServiceClient arming_client_;
+    
+    // ros::ServiceClient arming_client_;// included in the flight_task_control_client_
     ros::ServiceClient set_local_pos_ref_client_;
     ros::ServiceClient sdk_control_authority_client_;
-    ros::ServiceClient drone_task_control_client_;
+    ros::ServiceClient flight_task_control_client_;
+    // M210 mission management
     ros::ServiceClient mission_waypoint_upload_client;
     ros::ServiceClient mission_waypoint_setSpeed_client;
     ros::ServiceClient mission_waypoint_action_client;
 
+    // M300 mission management
+    ros::ServiceClient mission_waypointV2_upload_client;
+    ros::ServiceClient mission_waypointV2_action_client;
+
     ros::Publisher flight_control_pub_;
     
-    //test publishers
-    ros::Publisher lookahead_pub;
-    ros::Publisher ref_pose_pub;
-    ros::Publisher offset_y_pub;
+    // //test publishers
+    // ros::Publisher lookahead_pub;
+    // ros::Publisher ref_pose_pub;
+    // ros::Publisher offset_y_pub;
     
     
     ros::Subscriber position_sub_;

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import subprocess
 import argparse
 import os
@@ -8,13 +8,6 @@ import utils
 import rospkg
 import rospy
 
-def str_to_bool(s):
-    if s == 'true':
-        return True
-    elif s == 'false':
-        return False
-    else:
-        raise ValueError
 
 def main():
 
@@ -30,27 +23,44 @@ def main():
                         help='robot description package, must follow robots_description file structure')
     parser.add_argument('-debug', type=bool, default=False,
                         help='run gzserver with gdb')
-    parser.add_argument('-gazebo_headless', type=str, default='false',
-                        help='gazebo headless rendering')
     args, unknown = parser.parse_known_args()
     utils.check_unknown_args(unknown)
 
     # Get an instance of RosPack with the default search paths
     rospack = rospkg.RosPack()
-    px4_dir = rospack.get_path('px4')
-
-    # Set environment variables as in px4/Firmware/Tools/setup_gazebo.bash
+    rp_list = rospack.list()
+    
     gz_env = os.environ.copy()
+    
+    if 'px4' not in rp_list:
+        print("px4 not found in ROS_PACKAGE_PATH")
+        # Try to export it to ROS_PACKAGE_PATH 
+        
+        # find PX4-Autopilot directory recursively
+        for root, dirs, files in os.walk('/home/'):
+            if 'PX4-Autopilot' in dirs:
+                px4_dir = os.path.abspath(os.path.join(root, 'PX4-Autopilot'))
+                print("PX4-Autopilot found by launch_gzworld.py in " + px4_dir)
+                gz_env['ROS_PACKAGE_PATH'] += ':' + px4_dir + ':' + px4_dir + '/Tools/simulation/gazebo-classic/sitl_gazebo-classic'
+                break
+
+        
+
+
+         
+
+    # Set environment variables as in px4/Firmware/Tools/setup_gazebo.bash -> 
+    
     current_gz_plugin_path = gz_env.get('GAZEBO_PLUGIN_PATH', '')
-    gz_env['GAZEBO_PLUGIN_PATH'] = px4_dir + '/build/px4_sitl_default/build_gazebo' + \
-                                   ':' + current_gz_plugin_path
+    gz_env['GAZEBO_PLUGIN_PATH'] = px4_dir + '/build/px4_sitl_default/build_gazebo-classic' + \
+                                   ':' + current_gz_plugin_path # they do lot of changes, first path could be different
     current_gz_model_path = gz_env.get('GAZEBO_MODEL_PATH', '')
     # Always include robots_description parent path
     robots_description_parent_path = os.path.abspath(os.path.join(\
                                               rospack.get_path('robots_description'), os.pardir))
-    gz_env['GAZEBO_MODEL_PATH'] = px4_dir + '/Tools/sitl_gazebo/models' + \
+    gz_env['GAZEBO_MODEL_PATH'] = px4_dir + '/Tools/simulation/gazebo-classic/sitl_gazebo-classic/models' + \
                                  ':' + robots_description_parent_path + \
-                                 ':' + current_gz_model_path
+                                 ':' + current_gz_model_path # they do lot of changes, first path could be different
     # Include description_package parent path if it is not robots_description
     if args.description_package is not "robots_description":
         description_package_parent_path = os.path.abspath(os.path.join(\
@@ -93,30 +103,26 @@ def main():
         server = subprocess.Popen('gnome-terminal -- ' + server_args, cwd=temp_dir, \
                                             env=gz_env, shell=True, preexec_fn=os.setsid)
 
-    # Sta(rt gazebo client
-    if not str_to_bool(args.gazebo_headless):
-        time.sleep(0.2)
-        client_args = "rosrun gazebo_ros gzclient __name:=gazebo_gui"
-        # client_args = "rosrun gazebo_ros gzclient __name:=gazebo_gui headless:=true"
-        client_out = open(temp_dir + '/gzclient.out', 'w')
-        client_err = open(temp_dir + '/gzclient.err', 'w')
-        client = subprocess.Popen(client_args, stdout=client_out, stderr=client_err, cwd=temp_dir, \
-                                               env=gz_env, shell=True, preexec_fn=os.setsid)
+    # Start gazebo client
+    time.sleep(0.2)
+    client_args = "rosrun gazebo_ros gzclient __name:=gazebo_gui"
+    client_out = open(temp_dir + '/gzclient.out', 'w')
+    client_err = open(temp_dir + '/gzclient.err', 'w')
+    client = subprocess.Popen(client_args, stdout=client_out, stderr=client_err, cwd=temp_dir, \
+                                           env=gz_env, shell=True, preexec_fn=os.setsid)
 
     rospy.spin()  # Now I'm a ros node, just wait
 
     # Kill'em all
+    if client.poll() is None:
+        os.killpg(os.getpgid(client.pid), signal.SIGTERM)  # TODO: SIGKILL?
     if server.poll() is None:
         os.killpg(os.getpgid(server.pid), signal.SIGTERM)  # TODO: SIGKILL?
-    if not str_to_bool(args.gazebo_headless):
-        if client.poll() is None:
-            os.killpg(os.getpgid(client.pid), signal.SIGTERM)  # TODO: SIGKILL?
     # Close log files
+    client_out.close()
+    client_err.close()
     server_out.close()
     server_err.close()
-    if not str_to_bool(args.gazebo_headless):
-        client_out.close()
-        client_err.close()
 
 
 if __name__ == '__main__':

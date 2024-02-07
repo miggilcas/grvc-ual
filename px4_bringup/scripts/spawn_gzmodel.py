@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import subprocess
 import argparse
 import utils
@@ -53,6 +53,7 @@ def main():
 
     # Create temporary directory for robot sitl stuff
     temp_dir = utils.temp_dir(args.id)
+    #print("CREATING TEMP DIR: " + temp_dir)# debugged
     subprocess.call("mkdir -p " + temp_dir, shell=True)
 
     # Get udp configuration, depending on id
@@ -78,7 +79,7 @@ def main():
             model_file_type = "xacro"
             model_file = args.model + ".xacro"
             break
-
+    # debugged
     if model_file_type == "xacro":
         xacro_description = description_dir + "/models/" + args.model + "/" + model_file
 
@@ -113,12 +114,14 @@ def main():
 
         xacro_out = open(temp_dir+"/xacro.out", 'w')
         xacro_err = open(temp_dir+"/xacro.err", 'w')
+        print("Creating the urdf file in " + temp_urdf)
         subprocess.call(xacro_args, shell=True, stdout=xacro_out, stderr=xacro_err)
         xacro_out.close()
         xacro_err.close()
 
         # Create sdf from urdf
         temp_sdf = temp_dir + "/" + args.model + ".sdf"
+        print("Creating the sdf file: " + temp_sdf)
         subprocess.call("gz sdf -p " + temp_urdf + " > " + temp_sdf, shell=True)
 
     elif model_file_type == "sdf":

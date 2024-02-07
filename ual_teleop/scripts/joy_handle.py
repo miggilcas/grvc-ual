@@ -173,4 +173,4 @@ class JoyHandle:
         return output
 
 if __name__ == "__main__":
-    print "This is not a script!"
+    print("This is not a script!")
