@@ -102,11 +102,9 @@ BackendDjiRosNew::BackendDjiRosNew() // checked
     std::string get_status_topic = dji_ns + "/flight_status";
     std::string get_mode_topic = dji_ns + "/display_mode";
 
-    //std::string get_laser_altitude_topic = "/laser_altitude";
+    std::string get_laser_altitude_topic = "/height_above_takeoff";
 
-    // ROS published topics
-    //std::string flight_control_topic = dji_ns + "/flight_control_setpoint_generic";
-    // FROM HERE
+    
     // ROS services' Clients 
     
     set_local_pos_ref_client_ = nh.serviceClient<dji_sdk::SetLocalPosRef>(set_local_pos_ref_srv.c_str());
@@ -153,10 +151,10 @@ BackendDjiRosNew::BackendDjiRosNew() // checked
             this->cur_pose_.pose.orientation = this->current_attitude_.quaternion;
     });
 
-    // laser_altitude_sub_ = nh.subscribe<std_msgs::Float64>(get_laser_altitude_topic.c_str(), 1, \
-    //     [this](const std_msgs::Float64::ConstPtr& _msg) {
-    //         this->current_laser_altitude_ = *_msg;
-    // });
+    laser_altitude_sub_ = nh.subscribe<std_msgs::Float64>(get_laser_altitude_topic.c_str(), 1, \
+        [this](const std_msgs::Float64::ConstPtr& _msg) {
+            this->current_laser_altitude_ = *_msg;
+    });
 
     linear_velocity_sub_ = nh.subscribe<geometry_msgs::Vector3Stamped>(get_linear_velocity_topic.c_str(), 1, \
         [this](const geometry_msgs::Vector3Stamped::ConstPtr& _msg) {
@@ -186,7 +184,7 @@ BackendDjiRosNew::BackendDjiRosNew() // checked
 
     ROS_INFO("BackendDjiRosNew %d running!", robot_id_);
 }
-// TBD
+// TBD: study
 void BackendDjiRosNew::controlThread() {
     ros::param::param<double>("~dji_offboard_rate", control_thread_frequency_, 30.0);
     double hold_pose_time = 3.0;  // [s]  TODO param?
@@ -338,26 +336,26 @@ void BackendDjiRosNew::controlThread() {
         rate.sleep();
     }
 }
-
+// Modified the flight status and the display procedence
 grvc::ual::State BackendDjiRosNew::guessState() { // I think it could work like that
     // Sequentially checks allow state deduction
     if (!this->isReady()) { return uav_abstraction_layer::State::UNINITIALIZED; }
-    if (this->flight_status_.data == DJISDK::FlightStatus::STATUS_STOPPED) { 
+    if (this->flight_status_.data == DJI::OSDK::VehicleStatus::FlightStatus::STOPED) { 
         if (self_arming) {
             return uav_abstraction_layer::State::LANDED_ARMED;
         } else {
             return uav_abstraction_layer::State::LANDED_DISARMED; 
         }
     }
-    if (this->flight_status_.data == DJISDK::FlightStatus::STATUS_ON_GROUND) { return uav_abstraction_layer::State::LANDED_ARMED; }
-    if (this->calling_takeoff && this->flight_status_.data == DJISDK::FlightStatus::STATUS_IN_AIR ) 
+    if (this->flight_status_.data == DJI::OSDK::VehicleStatus::FlightStatus::ON_GROUND) { return uav_abstraction_layer::State::LANDED_ARMED; }
+    if (this->calling_takeoff && this->flight_status_.data == DJI::OSDK::VehicleStatus::FlightStatus::IN_AIR  ) 
         { return uav_abstraction_layer::State::TAKING_OFF; }
-    if (this->calling_land && this->flight_status_.data == DJISDK::FlightStatus::STATUS_IN_AIR ) 
+    if (this->calling_land && this->flight_status_.data == DJI::OSDK::VehicleStatus::FlightStatus::IN_AIR  ) 
         { return uav_abstraction_layer::State::LANDING; }
     if (!this->calling_takeoff && !this->calling_land 
-        && this->flight_status_.data == DJISDK::FlightStatus::STATUS_IN_AIR 
+        && this->flight_status_.data == DJI::OSDK::VehicleStatus::FlightStatus::IN_AIR 
         // && this->display_mode_.data == 6) 
-        && this->display_mode_.data == DJISDK::DisplayMode::MODE_NAVI_SDK_CTRL) 
+        && this->display_mode_.data == DJI::OSDK::VehicleStatus::DisplayMode::MODE_NAVI_SDK_CTRL) 
         // && this->display_mode_.data == DJISDK::DisplayMode::MODE_P_GPS) 
         { return uav_abstraction_layer::State::FLYING_AUTO; }
 
@@ -398,28 +396,19 @@ void BackendDjiRosNew::Quaternion2EulerAngle(const geometry_msgs::Pose::_orienta
 	yaw = atan2(siny, cosy);
 }
 
-//TBD: Calling flightTaskControl 
+//TBD: Check
 void BackendDjiRosNew::setArmed(bool _value) {
     int arm;
-    if(_value) {arm=1;}
-    else if(!_value) {arm=0;}
-    dji_sdk::DroneArmControl arming_service;
-    arming_service.request.arm = _value;
-    arming_client_.call(arming_service);
+    dji_sdk::FlightTaskControl arming_service;
+    if(_value) {arm=1;
+        arming_service.request.task = dji_osdk_ros::FlightTaskControl::Request ::START_MOTOR;
+    }
+    else if(!_value) {arm=0;
+        arming_service.request.task = dji_osdk_ros::FlightTaskControl::Request ::STOP_MOTOR;}
+    
+    
+    flight_task_control_client_.call(arming_service);
 
-//     mavros_msgs::CommandBool arming_service;
-//     arming_service.request.value = _value;
-//     // Arm: unabortable?
-//     while (ros::ok()) {
-//         if (!arming_client_.call(arming_service)) {
-//             ROS_ERROR("Error in arming service calling!");
-//         }
-//         std::this_thread::sleep_for(std::chrono::milliseconds(300));
-//         ROS_INFO("Arming service response.success = %s", arming_service.response.success ? "true" : "false");
-//         ROS_INFO("Trying to set armed to %s... mavros_state_.armed = %s", _value ? "true" : "false", mavros_state_.armed ? "true" : "false");
-//         bool armed = mavros_state_.armed;  // WATCHOUT: bug-prone ros-bool/bool comparison 
-//         if (armed == _value) { break; }  // Out-of-while condition
-//     }
 }
 
 // void BackendDjiRosNew::setFlightMode(const std::string& _flight_mode) {
@@ -444,13 +433,13 @@ void BackendDjiRosNew::setArmed(bool _value) {
 // }
 //TBD
 void BackendDjiRosNew::recoverFromManual() {
-    if (display_mode_.data != DJISDK::DisplayMode::MODE_P_GPS) {
+    if (display_mode_.data != DJI::OSDK::VehicleStatus::DisplayMode::MODE_P_GPS) {
         ROS_ERROR("Unable to recover from manual. Not in P_GPS MODE");
         ROS_INFO("Please switch rc to P_GPS MODE");
         return;
     }
-    dji_sdk::SDKControlAuthority sdk_control_authority;
-    sdk_control_authority.request.control_enable = dji_sdk::SDKControlAuthority::Request::REQUEST_CONTROL;
+    dji_sdk::ObtainControlAuthority sdk_control_authority;
+    sdk_control_authority.request.enable_obtain = true;
     sdk_control_authority_client_.call(sdk_control_authority);
 
     reference_vel_.twist.linear.x = 0;
@@ -487,17 +476,17 @@ void BackendDjiRosNew::takeOff(double _height) {
     }
 
     if(!home_set_){
-        dji_sdk::SetLocalPosRef set_local_pos_ref;
+        dji_osdk_ros::SetLocalPosRef set_local_pos_ref;
         set_local_pos_ref_client_.call(set_local_pos_ref);
         home_set_ = true;
     }
  
-    dji_sdk::SDKControlAuthority sdk_control_authority;
-    sdk_control_authority.request.control_enable = dji_sdk::SDKControlAuthority::Request::REQUEST_CONTROL;
+    dji_osdk_ros::ObtainControlAuthority sdk_control_authority;
+    sdk_control_authority.request.enable_obtain = true;
     sdk_control_authority_client_.call(sdk_control_authority);
 
-    dji_sdk::DroneTaskControl drone_task_control;
-    drone_task_control.request.task = dji_sdk::DroneTaskControl::Request::TASK_TAKEOFF;
+    dji_osdk_ros::FlightTaskControl flight_task_control;
+    drone_task_control.request.task = dji_osdk_ros::FlightTaskControl::Request::TASK_TAKEOFF;
     drone_task_control_client_.call(drone_task_control);
     ROS_INFO("Taking Off...");
 
@@ -541,12 +530,12 @@ void BackendDjiRosNew::takeOff(double _height) {
     control_mode_ = eControlMode::IDLE;    //Disable control in position
 
 }
-//TBD: Calling flightTaskControl 
+//TBD: Check
 void BackendDjiRosNew::land() {
     calling_land = true;
 
-    dji_sdk::DroneTaskControl drone_task_control;
-    drone_task_control.request.task = dji_sdk::DroneTaskControl::Request::TASK_LAND;
+    dji_osdk_ros::FlightTaskControl drone_task_control;
+    drone_task_control.request.task = dji_osdk_ros::FlightTaskControl::Request::TASK_LAND;
     drone_task_control_client_.call(drone_task_control);
    
     if(!drone_task_control.response.result) {
@@ -556,7 +545,7 @@ void BackendDjiRosNew::land() {
     ROS_INFO("Landing...");
     }
 
-    while (flight_status_.data != DJISDK::FlightStatus::STATUS_STOPPED) {
+    while (flight_status_.data != DJI::OSDK::VehicleStatus::FlightStatus::STATUS_STOPPED) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     ROS_INFO("Landed!");
@@ -593,8 +582,8 @@ void BackendDjiRosNew::land() {
 //                 return this->goHome();
 //TBD: Calling flightTaskControl 
 void BackendDjiRosNew::goHome() {
-    dji_sdk::DroneTaskControl drone_task_control;
-    drone_task_control.request.task = dji_sdk::DroneTaskControl::Request::TASK_GOHOME;
+    dji_osdk_ros::FlightTaskControl drone_task_control;
+    drone_task_control.request.task = dji_osdk_ros::FlightTaskControl::Request::TASK_GOHOME;
     drone_task_control_client_.call(drone_task_control);
 
     control_mode_ = eControlMode::IDLE; 
